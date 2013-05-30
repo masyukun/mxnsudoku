@@ -31,6 +31,8 @@
  * 
  */
 
+package com.masyukun.puzzle.sudoku;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 
