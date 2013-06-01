@@ -33,8 +33,14 @@
 
 package com.masyukun.puzzle.sudoku;
 
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Stack;
 
 
 public class MxNSudoku {
@@ -52,6 +58,26 @@ public class MxNSudoku {
 		= new ArrayList<String>(Arrays.asList("1","2","3","4","5","6","7","8","9"));
 
 	public static int MAX_SYMBOL_LENGTH = 1;
+	
+	/**
+	 * Produce an empty grid, initialized with EMPTY Strings.
+	 * @param horz number of columns
+	 * @param vert number of rows
+	 * @return the grid
+	 */
+	private static String[][] gridFactory(int horz, int vert) {
+		// Create the grid
+		String grid[][] = new String[horz][vert];
+		
+		// Fill the grid with blank strings
+		for (int ii = 0; ii < horz; ++ii) {
+			for (int jj = 0; jj < vert; ++jj) {
+				grid[ii][jj] = EMPTY;
+			}
+		}
+
+		return grid;
+	}
 	
 	/**
 	 * Initialize the Sudoku grid with a game. 0 is a blank board, as are unallocated game numbers.
@@ -101,15 +127,8 @@ public class MxNSudoku {
 		}
 		
 		// Create the grid
-		String grid[][] = new String[HORZ][VERT];
+		String grid[][] = gridFactory(HORZ, VERT);
 		
-		// Fill the grid with blank strings
-		for (int ii = 0; ii < HORZ; ++ii) {
-			for (int jj = 0; jj < VERT; ++jj) {
-				grid[ii][jj] = EMPTY;
-			}
-		}
-
 		
 		// Assign the symbols to the grid
 		switch(gameNum) {
@@ -716,46 +735,176 @@ public class MxNSudoku {
 		return solvedIt;
 	}
 	
+	/**
+	 * Read in a puzzle file
+	 * @param args
+	 * @return a grid. Null if something terrible happened.
+	 */
+	private static String[][] readPuzzleFile(String[] args) {
+		String[][] grid = null;
+		BufferedReader sudokuFile = null;
+		boolean chideUser = false;
+		
+		if (args[0].equals("-f")) {
+			String filename = args[1];
+			
+			try {
+				FileInputStream fis = new FileInputStream(filename);
+				InputStreamReader in = new InputStreamReader(fis);
+		        sudokuFile = new BufferedReader(in);
+		        
+		        // Read SudoCue files
+		        if (filename.toLowerCase().contains(".sdk")) {
+		        	Stack<String> puzzle = new Stack<String>();
+		        	int puzzleWidth = -1;
+		        	int puzzleHeight = 0;
+		        	
+		        	String line;
+			        while((line = sudokuFile.readLine()) != null) {
+			        	// Ignore comments 
+			        	if (line.length() > 3 && line.trim().charAt(0) != '#') {
+			        		
+			            	// Get initial length read
+			        		if (-1 == puzzleWidth) {
+			            		puzzleWidth = line.length();
+			            	} else if (puzzleWidth != line.length()) {
+			            		// Puzzle is wibbly-wobbly
+			            		System.out.println(String.format("The puzzle in \"%s\" is messed up.", filename));
+			            		chideUser = true;
+			            		break;
+			            	}
+			        		
+			        		// Store the puzzle
+			        		puzzle.push(line);
+			        		puzzleHeight += 1;
+			            }
+			        }
+			        
+			        // Everything seems cool.
+			        if (!chideUser) {
+			        	// Init an empty grid
+			        	grid = gridFactory(puzzleWidth, puzzleHeight);
+			        	
+			        	// Read puzzle coordinates backwards into the grid
+			        	int ii;
+			        	for (ii = puzzleHeight - 1; ii >= 0 && puzzle.size() > 0; --ii) {
+			        		line = puzzle.pop();
+			        		
+			        		for (int jj = 0; jj < puzzleWidth; ++jj) {
+			        			// Ignore blanks
+			        			if (line.charAt(jj) != '.') {
+			        				grid[ii][jj] = String.valueOf( line.charAt(jj) );
+			        			}
+			        		}
+			        	}
+			        	
+			        	// Error check -- did we finish the puzzle?
+			        	if (ii >= 0) {
+			        		System.out.println(String.format("Puzzle height was weird, and I don't know why.\nWait -- I'm seeing something! It's the number... %d.\nDoes that mean something to you?", ii));
+			        		chideUser = true;
+			        	} else if (puzzle.size() > 0) {
+			        		System.out.println(String.format("Puzzle height was weird... the top %d rows of the puzzle might be missing.", puzzle.size()));
+			        		chideUser = true;			        		
+			        	}
+			        }
+		        } else {
+		        	System.out.println(String.format("\nThis version of mxnsudoku doesn't know how to read \"%s\"", filename));
+		        	System.out.println("It can read: 1) SudoCue .SDK files");
+            		chideUser = true;
+		        }
+		        
+		        // Clean up time
+		        sudokuFile.close();
+				
+			} catch (FileNotFoundException e) {
+				System.out.println(String.format("\n\nThe file \"%s\" does not exist.\n", args[1]));
+				e.printStackTrace();
+        		chideUser = true;
+			} catch (IOException e) {
+				System.out.println(String.format("\n\nSomething wonky happened while trying to read the file \"%s\"\n", args[1]));
+				e.printStackTrace();
+        		chideUser = true;
+			} 
+		} else {
+			System.out.println(String.format("\n Hmmm... I don't recognize the \"%s\" command-line option.", args[0]));
+    		chideUser = true;
+		}
+
+		// Shut 'er down.
+		if (chideUser) {
+			grid = null;
+		}
+		
+		return grid;
+	}
 	
 	public static void main (String[] args) {
+		
+		String[][] grid = null;
+		ArrayList<String>[][] poss;
+		
+		boolean chideUser = false;
+		
 		
 		if (args.length == 1) {
 
 			// Init the Sudoku grid
-			String[][] grid = initGrid(Integer.parseInt(args[0]));
-			printGrid(grid);
-			System.out.println("\n");
+			try {
+				grid = initGrid(Integer.parseInt(args[0]));
 
-			// Init the possibles matrix
-			ArrayList<String>[][] poss = initPossibles(grid);
-			updatePossibles(grid, poss);
-			printGrid(poss);
-
+			} catch(NumberFormatException e) {
+				chideUser = true;
+			}
 			
-			// Play the game
-			int moves = 0;
-			boolean oneLine = false;
-			boolean exclusions = false;
-			do {
-				while ( (oneLine = solve(grid, poss)) || (exclusions = solveExclusions(grid, poss)) ) {
-					System.out.println("{move " + ++moves + "} "
-							+ ((exclusions) ? "exclusion " : "") 
-							+ ((oneLine) ? "oneline " : ""));
-					
-				}
-			} while(oneLine && exclusions);
-			System.out.println("\n");
-
+		} else if (args.length == 2) {
+			// Read a file instead of using a built-in game
+			grid = readPuzzleFile(args);
 			
-			// Print the end state
-			printGrid(grid);
-			printGrid(poss);
-			
+			if (null == grid) {
+				// herp derp
+				chideUser = true;
+			}
 		} else {
-			// Chide the user
-			System.out.println("\n\n   Usage: ./Sudoku game_number\n\n");
-
+			chideUser = true;
 		}
+
+		
+		// Chide the user
+		if (chideUser) {
+			System.out.println("\n\n   Usage: ./Sudoku game_number");
+			System.out.println("\n\n   Usage: ./Sudoku -f sudocue_file.sdk\n\n");
+			return;
+		}
+		
+
+		// Show the user what we've got
+		printGrid(grid);
+		System.out.println("\n");
+
+		// Init the possibles matrix
+		poss = initPossibles(grid);
+		updatePossibles(grid, poss);
+		printGrid(poss);
+
+		// Play the game
+		int moves = 0;
+		boolean oneLine = false;
+		boolean exclusions = false;
+		do {
+			while ( (oneLine = solve(grid, poss)) || (exclusions = solveExclusions(grid, poss)) ) {
+				System.out.println("{move " + ++moves + "} "
+						+ ((exclusions) ? "exclusion " : "") 
+						+ ((oneLine) ? "oneline " : ""));
+				
+			}
+		} while(oneLine && exclusions);
+		System.out.println("\n");
+
+		
+		// Print the end state
+		printGrid(grid);
+		printGrid(poss);
+		
 	}
 	
 	
